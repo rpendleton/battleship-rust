@@ -24,8 +24,11 @@ fn main() -> std::io::Result<()> {
         .expect("Invalid hit mask hex");
     let miss_mask = u128::from_str_radix(cli.miss.trim_start_matches("0x"), 16)
         .expect("Invalid miss mask hex");
+    
+    let reader = battleship::core::reader::create_reader(&cli.file)
+        .expect("Failed to create file reader");
 
-    let (counts, matched) = filter_and_count(&cli.file, hit_mask, miss_mask)?;
+    let (counts, matched) = filter_and_count(reader, hit_mask, miss_mask)?;
 
     eprintln!("Matched boards: {}", matched);
     // Print 9x9 grid of counts

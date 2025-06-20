@@ -1,4 +1,5 @@
 use crate::core::filter::filter_and_count;
+use crate::core::reader::create_reader;
 
 /// C-compatible FFI export for filter_and_count.
 ///
@@ -17,8 +18,14 @@ pub unsafe extern "C" fn filter_and_count_ffi(
 ) -> u64 {
     use std::ffi::CStr;
     let cstr = CStr::from_ptr(path_ptr);
+
     let path = match cstr.to_str() {
         Ok(s) => s,
+        Err(_) => return 0,
+    };
+
+    let reader = match create_reader(path) {
+        Ok(r) => r,
         Err(_) => return 0,
     };
 
@@ -26,7 +33,7 @@ pub unsafe extern "C" fn filter_and_count_ffi(
     let hit_mask = ((hit_mask_high as u128) << 64) | (hit_mask_low as u128);
     let miss_mask = ((miss_mask_high as u128) << 64) | (miss_mask_low as u128);
 
-    match filter_and_count(path, hit_mask, miss_mask) {
+    match filter_and_count(reader, hit_mask, miss_mask) {
         Ok((counts, matched)) => {
             let slice = std::slice::from_raw_parts_mut(out_counts, 81);
             slice.copy_from_slice(&counts[..]);

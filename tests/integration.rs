@@ -1,8 +1,7 @@
 use battleship::core::{
-    filter::{filter_and_count_reader, filter_and_count},
-    reader::create_file_reader,
+    filter::{filter_and_count},
+    reader::{create_reader},
 };
-use std::io::{Cursor, Read};
 
 /// Expected counts for all boards with no filtering (hit_mask=0, miss_mask=0)
 /// This represents the heatmap of ship placement frequency across all valid boards
@@ -36,22 +35,22 @@ pub fn validate_expected_counts(actual_counts: &[u32]) -> Result<(), String> {
 }
 
 /// Create test data with a few sample boards in delta-encoded format
-fn create_test_delta_data() -> Vec<u8> {
-    let mut data = Vec::new();
+fn create_test_delta_data() -> Vec<std::io::Result<u128>> {
+    let mut data: Vec<std::io::Result<u128>> = Vec::new();
 
     // First board (stored as-is)
     let board1: u128 = 0x123456789ABCDEF0_123456789ABCDEF0;
-    data.extend_from_slice(&board1.to_le_bytes());
+    data.push(Ok(board1));
 
     // Second board (stored as delta from first)
     let board2: u128 = 0x111111111111111_111111111111111;
-    let delta2 = board1 ^ board2;
-    data.extend_from_slice(&delta2.to_le_bytes());
+    let delta2 = board2;
+    data.push(Ok(delta2));
 
     // Third board (stored as delta from second)
     let board3: u128 = 0x222222222222222_222222222222222;
-    let delta3 = board2 ^ board3;
-    data.extend_from_slice(&delta3.to_le_bytes());
+    let delta3 = board3;
+    data.push(Ok(delta3));
 
     data
 }
@@ -59,10 +58,9 @@ fn create_test_delta_data() -> Vec<u8> {
 #[test]
 fn test_delta_decoding_basic() {
     let test_data = create_test_delta_data();
-    let cursor = Cursor::new(test_data);
 
     // Filter with no restrictions (all boards should match)
-    let (counts, matched) = filter_and_count_reader(cursor, 0, 0).unwrap();
+    let (counts, matched) = filter_and_count(test_data, 0, 0).unwrap();
 
     assert_eq!(matched, 3, "Should match all 3 test boards");
     assert_eq!(counts.len(), 81, "Should have 81 cell counts");
@@ -70,18 +68,16 @@ fn test_delta_decoding_basic() {
 
 #[test]
 fn test_filtering_logic() {
-    let test_data = create_test_delta_data();
-
     // Test hit mask filtering
     let hit_mask: u128 = 0x1; // Require bit 0 to be set
-    let (_, matched_with_hit) = filter_and_count_reader(Cursor::new(test_data.clone()), hit_mask, 0).unwrap();
+    let (_, matched_with_hit) = filter_and_count(create_test_delta_data(), hit_mask, 0).unwrap();
 
     // Test miss mask filtering
     let miss_mask: u128 = 0x1; // Require bit 0 to NOT be set
-    let (_, matched_with_miss) = filter_and_count_reader(Cursor::new(test_data.clone()), 0, miss_mask).unwrap();
+    let (_, matched_with_miss) = filter_and_count(create_test_delta_data(), 0, miss_mask).unwrap();
 
     // Test no filtering
-    let (_, matched_no_filter) = filter_and_count_reader(Cursor::new(test_data), 0, 0).unwrap();
+    let (_, matched_no_filter) = filter_and_count(create_test_delta_data(), 0, 0).unwrap();
 
     // With filtering, we should get fewer or equal matches
     assert!(matched_with_hit <= matched_no_filter);
@@ -100,7 +96,10 @@ fn test_expected_all_boards_counts_with_real_data() {
         return;
     }
 
-    let (counts, matched) = filter_and_count(data_path, 0, 0)
+    let reader = create_reader(data_path)
+        .expect("Failed to create reader for board data file");
+
+    let (counts, matched) = filter_and_count(reader, 0, 0)
         .expect("Failed to process board data file");
 
     println!("Processed {} total boards", matched);
@@ -125,37 +124,18 @@ fn test_data_file_smoke_test() {
     }
 
     // Test reading just the first few records
-    let mut reader = create_file_reader(data_path).expect("Failed to create reader");
+    let reader = create_reader(data_path).expect("Failed to create reader");
 
-    // Read with delta decoding for first few records
-    let mut buf = [0u8; 16];
-    let mut prev_record = [0u8; 16];
-    let mut first_record = true;
-
-    for i in 0..10 {
-        match reader.read_exact(&mut buf) {
-            Ok(()) => {
-                // Handle delta decoding for first few records
-                let current_record = if first_record {
-                    first_record = false;
-                    buf
-                } else {
-                    let mut decoded = [0u8; 16];
-                    for j in 0..16 {
-                        decoded[j] = buf[j] ^ prev_record[j];
-                    }
-                    decoded
-                };
-
-                let raw = u128::from_le_bytes(current_record);
+    // Use iterator interface to read and print first 10 records
+    for (i, result) in reader.into_iter().take(10).enumerate() {
+        match result {
+            Ok(raw) => {
                 println!("Record {}: 0x{:032x}", i, raw);
-                prev_record.copy_from_slice(&current_record);
             },
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                println!("Reached end of file at record {}", i);
+            Err(e) => {
+                println!("Error reading record {}: {}", i, e);
                 break;
-            },
-            Err(e) => panic!("Error reading record {}: {}", i, e),
+            }
         }
     }
 
@@ -189,49 +169,23 @@ fn test_limited_records_counting() {
     }
 
     // Create a limited reader that only processes first 1000 records
-    let mut reader = create_file_reader(data_path).expect("Failed to create reader");
-    let mut buf = [0u8; 16];
+    let reader = create_reader(data_path).expect("Failed to create reader");
     let mut counts = vec![0u32; 81];
     let mut total_matched: u64 = 0;
-    let mut prev_record = [0u8; 16];
-    let mut first_record = true;
-
-    const MAX_RECORDS: usize = 1000;
-
-    for _ in 0..MAX_RECORDS {
-        match reader.read_exact(&mut buf) {
-            Ok(()) => {},
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+    for result in reader.into_iter().take(1000) {
+        let raw = match result {
+            Ok(val) => val,
             Err(e) => panic!("Error reading: {}", e),
-        }
-
-        // Handle delta decoding
-        let current_record = if first_record {
-            first_record = false;
-            buf
-        } else {
-            let mut decoded = [0u8; 16];
-            for i in 0..16 {
-                decoded[i] = buf[i] ^ prev_record[i];
-            }
-            decoded
         };
-
-        // Parse u128 in little endian
-        let _raw = u128::from_le_bytes(current_record);
-
-        // No filtering for this test (hit_mask=0, miss_mask=0)
-        // Count bits
         total_matched += 1;
+        let bytes = raw.to_le_bytes();
         for bit in 0..81 {
             let byte_index = bit / 8;
             let bit_index = bit % 8;
-            if (current_record[byte_index] >> bit_index) & 1 == 1 {
+            if (bytes[byte_index] >> bit_index) & 1 == 1 {
                 counts[bit] += 1;
             }
         }
-
-        prev_record.copy_from_slice(&current_record);
     }
 
     println!("Processed {} records from data file", total_matched);
@@ -256,46 +210,25 @@ fn test_full_data_with_progress() {
     }
 
     // Create a reader for the full dataset
-    let mut reader = create_file_reader(data_path).expect("Failed to create reader");
-    let mut buf = [0u8; 16];
+    let reader = create_reader(data_path).expect("Failed to create reader");
     let mut counts = vec![0u32; 81];
     let mut total_matched: u64 = 0;
-    let mut prev_record = [0u8; 16];
-    let mut first_record = true;
     let start_time = std::time::Instant::now();
 
-    loop {
-        match reader.read_exact(&mut buf) {
-            Ok(()) => {},
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+    for result in reader {
+        let raw = match result {
+            Ok(val) => val,
             Err(e) => panic!("Error reading: {}", e),
-        }
-
-        // Handle delta decoding
-        let current_record = if first_record {
-            first_record = false;
-            buf
-        } else {
-            let mut decoded = [0u8; 16];
-            for i in 0..16 {
-                decoded[i] = buf[i] ^ prev_record[i];
-            }
-            decoded
         };
-
-        // No filtering for this test (hit_mask=0, miss_mask=0)
-        // Count bits
         total_matched += 1;
+        let bytes = raw.to_le_bytes();
         for bit in 0..81 {
             let byte_index = bit / 8;
             let bit_index = bit % 8;
-            if (current_record[byte_index] >> bit_index) & 1 == 1 {
+            if (bytes[byte_index] >> bit_index) & 1 == 1 {
                 counts[bit] += 1;
             }
         }
-
-        prev_record.copy_from_slice(&current_record);
-
         // Progress reporting every 10 million records
         if total_matched % 10_000_000 == 0 {
             let elapsed = start_time.elapsed();
