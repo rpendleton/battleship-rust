@@ -1,0 +1,12 @@
+[package]
+name = "battleship_filter"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "battleship_filter"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+zstd = "0.13"
