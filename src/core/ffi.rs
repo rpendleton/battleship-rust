@@ -1,4 +1,4 @@
-use crate::filter::filter_and_count;
+use crate::core::filter::filter_and_count;
 
 /// C-compatible FFI export for filter_and_count.
 ///

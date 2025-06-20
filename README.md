@@ -7,7 +7,7 @@ A high-performance **Battleship probability calculator** built in Rust that proc
 Traditional Battleship is often played with guesswork and intuition, but what if you could make mathematically optimal moves? This engine solves the core challenge of **optimal move selection** by:
 
 1. **Precomputing all valid board configurations** - Every possible way ships can be legally placed
-2. **Filtering based on known information** - Using hits and misses to eliminate impossible boards  
+2. **Filtering based on known information** - Using hits and misses to eliminate impossible boards
 3. **Generating probability heatmaps** - Showing where remaining ships are most likely to be
 4. **Recommending optimal moves** - Targeting cells with highest ship probability
 
@@ -138,7 +138,7 @@ cargo build --release
 cargo test
 
 # Run the CLI tool
-./target/release/battleship_filter data/boards.zst
+./target/release/battleship data/boards.zst
 ```
 
 ### FFI Integration (Swift)

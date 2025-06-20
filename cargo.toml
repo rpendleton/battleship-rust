@@ -1,10 +1,10 @@
 [package]
-name = "battleship_filter"
+name = "battleship"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "battleship_filter"
+name = "battleship"
 crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]

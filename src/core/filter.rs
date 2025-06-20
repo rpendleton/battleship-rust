@@ -1,7 +1,7 @@
 use std::io::{self, Read};
 use std::path::Path;
 
-use crate::reader::{create_file_reader, create_stdin_reader};
+use crate::core::reader::{create_file_reader, create_stdin_reader};
 
 /// Reads binary data of 16-byte hit masks from any reader, handles delta encoding,
 /// filters records by hit/miss masks, and accumulates counts of hits per cell (81 cells).

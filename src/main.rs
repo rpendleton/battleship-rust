@@ -1,5 +1,5 @@
 use clap::Parser;
-use battleship_filter::filter::filter_and_count;
+use battleship::core::filter::filter_and_count;
 
 #[derive(Parser)]
 #[command(name = "battleship-filter")]
