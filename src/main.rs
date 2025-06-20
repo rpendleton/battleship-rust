@@ -1,4 +1,5 @@
 use clap::Parser;
+use battleship_filter::filter::filter_and_count;
 
 #[derive(Parser)]
 #[command(name = "battleship-filter")]
@@ -15,10 +16,6 @@ struct Cli {
     /// Miss mask as hex
     #[arg(short, long)]
     miss: String,
-
-    /// Treat input as raw format (not delta-encoded). Default is delta-encoded.
-    #[arg(long)]
-    raw: bool,
 }
 
 fn main() -> std::io::Result<()> {
@@ -28,13 +25,7 @@ fn main() -> std::io::Result<()> {
     let miss_mask = u128::from_str_radix(cli.miss.trim_start_matches("0x"), 16)
         .expect("Invalid miss mask hex");
 
-    let is_delta_encoded = !cli.raw;
-    let (counts, matched) = battleship_filter::filter_and_count_with_format(
-        &cli.file, 
-        hit_mask, 
-        miss_mask, 
-        is_delta_encoded
-    )?;
+    let (counts, matched) = filter_and_count(&cli.file, hit_mask, miss_mask)?;
 
     eprintln!("Matched boards: {}", matched);
     // Print 9x9 grid of counts

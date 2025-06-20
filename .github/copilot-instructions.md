@@ -103,3 +103,21 @@ After filtering:
    - Ship sinking inference
    - Autoplay / bot logic
    - Optimizing next-move suggestions based on entropy reduction
+
+### Important Notes
+
+Since we're processing a significant number ofrecords, some of the unit tests can take a while to complete.
+To ensure the best performance, you should run the tests in release mode.
+
+The slower tests support reporting progress to the console to help you know that they're progressing.
+To see the progress of these tests, use the `--nocapture` flag when running the tests.
+
+For example, to run all tests in release mode with progress reporting, you can use the following command:
+```bash
+cargo test --release -- --nocapture
+```
+
+And to run a specific test that reports progress, you can use:
+```bash
+cargo test --release test_full_data_with_progress -- --nocapture
+```
