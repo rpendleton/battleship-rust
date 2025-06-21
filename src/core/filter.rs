@@ -23,10 +23,11 @@ where
         total_matched += 1;
 
         // Count hits per cell
-        for bit in 0..81 {
-            if (board & (1 << bit)) != 0 {
-                counts[bit] += 1;
-            }
+        let mut mask = board;
+        while mask != 0 {
+            let tz = mask.trailing_zeros() as usize;
+            counts[tz] += 1;
+            mask &= !(1 << tz);
         }
     }
 
