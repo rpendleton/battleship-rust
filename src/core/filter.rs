@@ -27,7 +27,7 @@ where
         while mask != 0 {
             let tz = mask.trailing_zeros() as usize;
             counts[tz] += 1;
-            mask &= !(1 << tz);
+            mask &= mask - 1; // Faster way to clear lowest set bit
         }
     }
 
