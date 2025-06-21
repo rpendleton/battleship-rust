@@ -51,11 +51,13 @@ fn process_chunk(chunk: &[u128]) -> Vec<u32> {
         .map(|&board| {
             let mut cell_counts = vec![0u32; 81];
 
-            // Count hits per cell
-            let mut mask = board;
+            // Count hits per cell (only consider bits 0-80 for 81-cell board)
+            let mut mask = board & ((1u128 << 81) - 1); // Mask to only consider first 81 bits
             while mask != 0 {
                 let bit = mask.trailing_zeros() as usize;
-                cell_counts[bit] += 1;
+                if bit < 81 {
+                    cell_counts[bit] += 1;
+                }
                 mask &= mask - 1; // Faster way to clear lowest set bit
             }
 
