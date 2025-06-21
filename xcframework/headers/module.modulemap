@@ -1,0 +1,4 @@
+module Battleship {
+    header "battleship.h"
+    export *
+}
