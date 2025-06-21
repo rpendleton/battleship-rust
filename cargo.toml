@@ -9,4 +9,5 @@ crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
+rayon = "1.8"
 zstd = "0.13"
