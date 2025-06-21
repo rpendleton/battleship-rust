@@ -2,12 +2,12 @@ use rayon::prelude::*;
 
 /// Reads an iterator of u128 hit masks, filters records by hit/miss masks,
 /// and accumulates counts of hits per cell (81 cells).
-pub fn filter_and_count<I>(reader: I, hit_mask: u128, miss_mask: u128) -> std::io::Result<(Vec<u32>, u64)>
+pub fn filter_and_count<I>(reader: I, hit_mask: u128, miss_mask: u128) -> std::io::Result<([u32; 81], u64)>
 where
     I: IntoIterator<Item = std::io::Result<u128>>,
 {
     const CHUNK_SIZE: usize = 1_000_000;
-    let mut counts = vec![0u32; 81];
+    let mut counts = [0u32; 81];
     let mut total_matched = 0u64;
     let mut chunk = Vec::with_capacity(CHUNK_SIZE);
 
@@ -46,10 +46,10 @@ where
     Ok((counts, total_matched))
 }
 
-fn process_chunk(chunk: &[u128]) -> Vec<u32> {
+fn process_chunk(chunk: &[u128]) -> [u32; 81] {
     chunk.par_iter()
         .map(|&board| {
-            let mut cell_counts = vec![0u32; 81];
+            let mut cell_counts = [0u32; 81];
 
             // Count hits per cell (only consider bits 0-80 for 81-cell board)
             let mut mask = board & ((1u128 << 81) - 1); // Mask to only consider first 81 bits
@@ -64,7 +64,7 @@ fn process_chunk(chunk: &[u128]) -> Vec<u32> {
             cell_counts
         })
         .reduce(
-            || vec![0u32; 81],
+            || [0u32; 81],
             |mut acc_counts, counts| {
                 for i in 0..81 {
                     acc_counts[i] += counts[i];
