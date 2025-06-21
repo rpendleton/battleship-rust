@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Read, BufReader};
 use std::path::Path;
 
 /// The zstd magic number (little endian: [0x28, 0xB5, 0x2F, 0xFD])
@@ -8,13 +8,12 @@ const ZSTD_MAGIC: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
 /// A reader that yields delta-XOR decoded u128s from an underlying reader.
 pub struct DeltaDecodingReader<R: Read> {
     inner: R,
-    prev: [u8; 16],
-    first: bool,
+    prev: u128,
 }
 
 impl<R: Read> DeltaDecodingReader<R> {
     pub fn new(inner: R) -> Self {
-        Self { inner, prev: [0u8; 16], first: true }
+        Self { inner, prev: 0 }
     }
 }
 
@@ -25,18 +24,11 @@ impl<R: Read> Iterator for DeltaDecodingReader<R> {
         let mut buf = [0u8; 16];
         match self.inner.read_exact(&mut buf) {
             Ok(()) => {
-                let decoded = if self.first {
-                    self.first = false;
-                    buf.clone()
-                } else {
-                    let mut out = [0u8; 16];
-                    for i in 0..16 {
-                        out[i] = buf[i] ^ self.prev[i];
-                    }
-                    out
-                };
-                self.prev.copy_from_slice(&decoded);
-                Some(Ok(u128::from_le_bytes(decoded)))
+                let encoded = u128::from_le_bytes(buf);
+                let decoded = self.prev ^ encoded;
+                self.prev = decoded;
+
+                Some(Ok(decoded))
             }
             Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => None,
             Err(e) => Some(Err(e)),
@@ -70,17 +62,19 @@ fn create_reader_with_magic_detection<R: Read + 'static>(mut reader: R) -> io::R
 }
 
 /// Creates a delta-decoding iterator for a file path that automatically handles zstd compression.
-fn create_file_reader<P: AsRef<Path>>(path: P) -> io::Result<DeltaDecodingReader<Box<dyn Read>>> {
+fn create_file_reader<P: AsRef<Path>>(path: P) -> io::Result<DeltaDecodingReader<BufReader<Box<dyn Read>>>> {
     let file = File::open(path)?;
     let reader = create_reader_with_magic_detection(file)?;
-    Ok(DeltaDecodingReader::new(reader))
+    let buffered_reader = BufReader::with_capacity(128 * 1024, reader); // 128KB BufReader
+    Ok(DeltaDecodingReader::new(buffered_reader))
 }
 
 /// Creates a delta-decoding iterator for stdin that automatically handles zstd compression.
-fn create_stdin_reader() -> io::Result<DeltaDecodingReader<Box<dyn Read>>> {
+fn create_stdin_reader() -> io::Result<DeltaDecodingReader<BufReader<Box<dyn Read>>>> {
     let stdin = io::stdin();
     let reader = create_reader_with_magic_detection(stdin)?;
-    Ok(DeltaDecodingReader::new(reader))
+    let buffered_reader = BufReader::with_capacity(128 * 1024, reader); // 128KB BufReader
+    Ok(DeltaDecodingReader::new(buffered_reader))
 }
 
 /// Creates a delta-decoding iterator for a given path, handling both file and stdin input, as well as zstd compression.
